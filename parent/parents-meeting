@@ -1,0 +1,85 @@
+<?php
+// Database connection
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "sms_project";
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+
+// Parent ID (Replace with actual logged-in parent ID)
+$parent_id = 1; // You should get this value from the session or authentication mechanism
+
+// Sending a message to the admin
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['send_message'])) {
+    $recipient_id = 1; // Assuming admin ID is 1
+    $message = $_POST['message'];
+
+    $sql = "INSERT INTO messages (sender_id, recipient_id, message) VALUES (?, ?, ?)";
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        die("Error preparing statement: " . $conn->error);
+    }
+    
+    $stmt->bind_param("iis", $parent_id, $recipient_id, $message);
+
+    if ($stmt->execute()) {
+        echo "Message sent successfully.";
+    } else {
+        echo "Error executing statement: " . $stmt->error;
+    }
+
+    $stmt->close();
+}
+
+// Fetching messages with admin
+$sql = "SELECT m.*, 
+               IF(m.sender_id = ?, 'You', 'Admin') AS sender_name 
+        FROM messages m
+        WHERE (m.sender_id = ? AND m.recipient_id = ?)
+           OR (m.sender_id = ? AND m.recipient_id = ?) 
+        ORDER BY m.timestamp DESC";
+
+$stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    die("Error preparing statement: " . $conn->error);
+}
+
+$admin_id = 1; // Assuming admin ID is 1
+$stmt->bind_param("iiiii", $parent_id, $parent_id, $admin_id, $admin_id, $parent_id);
+$stmt->execute();
+$messages_result = $stmt->get_result();
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Parent Portal - Communication with Admin</title>
+</head>
+<body>
+    <h2>Chat with Admin</h2>
+
+    <div style="border: 1px solid #000; padding: 10px; max-height: 400px; overflow-y: scroll;">
+        <?php while ($row = $messages_result->fetch_assoc()): ?>
+            <p><strong><?php echo $row['sender_name']; ?>:</strong> <?php echo $row['message']; ?><br>
+            <small><?php echo $row['timestamp']; ?></small></p>
+            <hr>
+        <?php endwhile; ?>
+    </div>
+
+    <h3>Send a Message</h3>
+    <form method="POST" action="">
+        <textarea name="message" rows="4" cols="50" placeholder="Type your message here..." required></textarea><br><br>
+        <input type="submit" name="send_message" value="Send Message">
+    </form>
+
+    <?php $conn->close(); ?>
+</body>
+</html>
